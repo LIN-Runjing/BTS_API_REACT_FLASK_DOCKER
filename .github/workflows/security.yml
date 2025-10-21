@@ -30,7 +30,7 @@ jobs:
       - name: Build backend image
         run: docker build -t ci-backend ./backend
 
-      - name: Run backend container (host network so it can reach postgres service on localhost)
+      - name: Run backend container (host network; can reach postgres on localhost)
         run: |
           docker rm -f backend >/dev/null 2>&1 || true
           docker run -d --name backend \
@@ -39,11 +39,9 @@ jobs:
             -e FLASK_RUN_HOST=0.0.0.0 \
             -e FLASK_RUN_PORT=5000 \
             -e DATABASE_URL="postgresql+psycopg2://user:userpassword@localhost:5432/flaskdb" \
-            -e SECRET_KEY="${{ secrets.FLASK_SECRET_KEY }}" \
-            -e JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}" \
             ci-backend
 
-      - name: Wait & test backend with curl
+      - name: Test backend with curl
         run: |
           for i in {1..60}; do
             if curl -sf http://localhost:5000/ >/dev/null; then
@@ -72,7 +70,7 @@ jobs:
             -e VITE_API_URL="http://localhost:5000" \
             ci-frontend
 
-      - name: Wait & test frontend with curl (Vite dev server)
+      - name: Test frontend with curl (Vite dev server)
         run: |
           for i in {1..60}; do
             if curl -sfI http://localhost:5173/ >/dev/null; then
