@@ -1,13 +1,8 @@
-version: '3.8'
+version: "3.8"
 
 services:
-  backend:
-
-  frontend:
- 
-
-  postgres_flask:
-    image: postgres:latest
+  db:
+    image: postgres:16-alpine
     container_name: flask_db
     restart: always
     environment:
@@ -17,7 +12,40 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ./postgres_data:/var/lib/postgresql/data
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d flaskdb"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: ./backend
+    container_name: bts_backend
+    environment:
+      FLASK_APP: app.py
+      FLASK_RUN_HOST: 0.0.0.0
+      FLASK_RUN_PORT: "5000"
+      DATABASE_URL: postgresql+psycopg2://user:userpassword@db:5432/flaskdb
+      SECRET_KEY: FdVw9jEX2t0uM8iQzvOEZLRhHTvHjQAvlC02xI9eWhaW7GZr0z7h6AqM9LJ5nYvR
+      JWT_SECRET_KEY: mXgW1r2EpQw9Df8oJh3cR7vA0bKpN4yGzZx6uVfT5dLs8qHcBnYkP3wE2tJrM0aC
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: bts_frontend
+    environment:
+      VITE_API_URL: http://localhost:5000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
 
 volumes:
-  postgres_data:
+  db_data: {}

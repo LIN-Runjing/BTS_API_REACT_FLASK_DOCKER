@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  import.meta.env.VITE_API_BASE ||
+  'http://localhost:5000'
 
 export default function LoginForm() {
   const [username, setUsername] = useState('')
@@ -11,6 +14,8 @@ export default function LoginForm() {
 
   const handleLogin = async (e) => {
     e.preventDefault()
+    setError(null)
+
     try {
       const res = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
@@ -18,17 +23,29 @@ export default function LoginForm() {
         body: JSON.stringify({ username, password }),
       })
 
-      const data = await res.json()
+    
+      const data = await res.json().catch(() => ({}))
 
       if (!res.ok) {
-        setError(data.error)
+        setError(data.error || 'Erreur serveur')
         return
       }
 
-      localStorage.setItem('token', data.access_token)
-      navigate('/dashboard') // 🔁 Redirection après login
+      const token = data.access_token || data.token
+      if (!token) {
+        setError('Réponse invalide du serveur (token manquant)')
+        console.log('Login response without token:', data)
+        return
+      }
+
+      localStorage.setItem('token', token)
+      localStorage.setItem('username', data.user?.username || username)
+
+      navigate('/dashboard', { replace: true })
+
     } catch (err) {
-      setError('Erreur serveur')
+      console.error(err)
+      setError('Impossible de joindre le serveur')
     }
   }
 

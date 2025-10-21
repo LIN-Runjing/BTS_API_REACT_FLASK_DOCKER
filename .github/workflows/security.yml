@@ -1,0 +1,85 @@
+name: Security & Build Check
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: flaskdb
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: userpassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U user -d flaskdb"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -t ci-backend ./backend
+
+      - name: Run backend container (host network so it can reach postgres service on localhost)
+        run: |
+          docker rm -f backend >/dev/null 2>&1 || true
+          docker run -d --name backend \
+            --network host \
+            -e FLASK_APP=app.py \
+            -e FLASK_RUN_HOST=0.0.0.0 \
+            -e FLASK_RUN_PORT=5000 \
+            -e DATABASE_URL="postgresql+psycopg2://user:userpassword@localhost:5432/flaskdb" \
+            -e SECRET_KEY="${{ secrets.FLASK_SECRET_KEY }}" \
+            -e JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}" \
+            ci-backend
+
+      - name: Wait & test backend with curl
+        run: |
+          for i in {1..60}; do
+            if curl -sf http://localhost:5000/ >/dev/null; then
+              echo "✅ Backend OK"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Backend not responding"
+          docker logs backend || true
+          exit 1
+
+  frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build frontend image
+        run: docker build -t ci-frontend ./frontend
+
+      - name: Run frontend container (host network; VITE_API_URL -> backend)
+        run: |
+          docker rm -f frontend >/dev/null 2>&1 || true
+          docker run -d --name frontend \
+            --network host \
+            -e VITE_API_URL="http://localhost:5000" \
+            ci-frontend
+
+      - name: Wait & test frontend with curl (Vite dev server)
+        run: |
+          for i in {1..60}; do
+            if curl -sfI http://localhost:5173/ >/dev/null; then
+              echo "✅ Frontend OK"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Frontend not responding"
+          docker logs frontend || true
+          exit 1

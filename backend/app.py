@@ -11,6 +11,9 @@ def create_app():
     CORS(app)
     app.config.from_object(Config)
 
+    app.config['SECRET_KEY'] = 'FdVw9jEX2t0uM8iQzvOEZLRhHTvHjQAvlC02xI9eWhaW7GZr0z7h6AqM9LJ5nYvR'
+    app.config['JWT_SECRET_KEY'] = 'mXgW1r2EpQw9Df8oJh3cR7vA0bKpN4yGzZx6uVfT5dLs8qHcBnYkP3wE2tJrM0aC'
+
     # Init extensions
     db.init_app(app)
     bcrypt.init_app(app)
@@ -24,6 +27,14 @@ def create_app():
     def create_tables():
         db.create_all()
         init_roles()
+        
+    @app.route("/")
+    def home():
+        return "Backend OK"
+
+    @app.route("/api/health")
+    def health():
+        return jsonify(status="ok")
 
     return app
 
